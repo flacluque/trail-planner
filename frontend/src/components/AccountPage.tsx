@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { accountClient, sendCode, verifyCode } from '../api/account';
+import { accountClient, accountProblem, sendCode, verifyCode, type AccountUnavailable } from '../api/account';
 
 interface Props {
   user: User | null;
@@ -20,12 +20,17 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: 
  */
 export function AccountPage({ user, sync, raceCount, onSignedIn, onSyncNow, onSignOut, onDelete }: Props) {
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<AccountUnavailable>('offline');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { void accountClient().then((c) => setAvailable(c !== null)); }, []);
+  const check = () => {
+    setAvailable(null);
+    void accountClient().then((c) => { setAvailable(c !== null); setProblem(accountProblem()); });
+  };
+  useEffect(check, []);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -97,7 +102,11 @@ export function AccountPage({ user, sync, raceCount, onSignedIn, onSyncNow, onSi
       <p>Facultatif : il sauvegarde tes courses et tes réglages, et tu les retrouves sur ton téléphone comme sur
         ordinateur. Pas de mot de passe : tu reçois un code par e-mail.</p>
       {available === false ? (
-        <p className="muted">Les comptes ne sont pas disponibles pour le moment. Vérifie ta connexion et réessaie.</p>
+        <p className="muted">
+          {problem === 'disabled' ? 'Les comptes ne sont pas encore activés sur Ravitime.'
+            : 'Le serveur ne répond pas : vérifie ta connexion (s\'il dormait, il met environ une minute à se réveiller).'}{' '}
+          <button type="button" className="link-btn" onClick={check}>Réessayer</button>
+        </p>
       ) : step === 'email' ? (
         <form className="account-form" onSubmit={askCode} noValidate>
           <label>

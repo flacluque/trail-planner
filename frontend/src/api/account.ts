@@ -21,6 +21,11 @@ interface AccountConfig {
 
 let client: Promise<SupabaseClient | null> | null = null;
 
+/** Pourquoi les comptes ne sont pas disponibles : serveur injoignable, ou comptes pas activés sur le serveur. */
+export type AccountUnavailable = 'offline' | 'disabled';
+let lastProblem: AccountUnavailable = 'offline';
+export const accountProblem = (): AccountUnavailable => lastProblem;
+
 /** Adresse et clé publique du projet, données par le serveur (gardées pour l'ouverture hors ligne). */
 async function config(): Promise<AccountConfig | null> {
   try {
@@ -34,8 +39,11 @@ async function config(): Promise<AccountConfig | null> {
     // stockage indisponible
   }
   try {
-    return remember(await fetchAppInfo());
+    const value = remember(await fetchAppInfo());
+    if (!value) lastProblem = 'disabled';
+    return value;
   } catch {
+    lastProblem = 'offline';
     return null;
   }
 }

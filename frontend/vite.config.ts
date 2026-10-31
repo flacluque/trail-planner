@@ -30,7 +30,9 @@ export default defineConfig(({ mode }) => ({
         runtimeCaching: [
           {
             // Strava : jamais de cache (connexion, jetons, activités toujours à jour).
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/strava/'),
+            // /api/app non plus : la configuration (code d'accès, comptes) doit être celle du serveur, pas une copie.
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/strava/')
+              && url.pathname !== '/api/app',
             handler: 'NetworkFirst',
             options: { cacheName: 'api', networkTimeoutSeconds: 5, expiration: { maxEntries: 50 } },
           },

@@ -219,7 +219,8 @@ export interface AppInfo {
 }
 
 export function fetchAppInfo(): Promise<AppInfo> {
-  return getJson('/api/app');
+  // Jamais une réponse gardée : elle pourrait dater d'avant un changement de configuration (comptes).
+  return getJson('/api/app', { cache: 'no-store' });
 }
 
 /** Envoie le code d'invitation ; le serveur le retient dans un cookie. */
