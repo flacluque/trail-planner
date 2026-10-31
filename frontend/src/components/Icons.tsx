@@ -75,3 +75,12 @@ export const PlusIcon = ({ size = 22 }: IconProps) => (
 export const ChevronDownIcon = ({ size = 22 }: IconProps) => (
   <svg {...base} width={size} height={size}><path d="M6 9l6 6 6-6" /></svg>
 );
+export const CloudIcon = ({ size = 22 }: IconProps) => (
+  <svg {...base} width={size} height={size}><path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18z" /><path d="M10 13.5l1.8 1.8 3.4-3.6" /></svg>
+);
+export const DevicesIcon = ({ size = 22 }: IconProps) => (
+  <svg {...base} width={size} height={size}><rect x="2" y="5" width="13" height="10" rx="1.5" /><path d="M5 19h7" /><rect x="16" y="8" width="6" height="12" rx="1.5" /></svg>
+);
+export const KeyIcon = ({ size = 22 }: IconProps) => (
+  <svg {...base} width={size} height={size}><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 8l9 6 9-6" /></svg>
+);
