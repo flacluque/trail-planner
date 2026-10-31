@@ -395,3 +395,16 @@ et pourra être réutilisé tel quel (CLI, appli mobile via une API, batch de ca
 - [x] **v0.7c** : ravitos placés sur la trace : un ravito se fait glisser sur la carte jusqu'à sa vraie place (roadbook
   faux), les waypoints du GPX au nom des ravitos sont repris, et le site signale un ravito dont le D+ ou le waypoint ne
   colle pas avec le km du roadbook. Le plan, le parcours Garmin et le code du champ suivent la position sur la trace
+
+## Comptes (Supabase)
+
+Facultatifs : ils sauvegardent « Mes courses » et les réglages pour les retrouver sur tous les appareils. L'appli parle
+directement à Supabase avec la clé publique du projet ; chaque coureur n'accède qu'à ses lignes (Row Level Security).
+Rien de ce qui vient de Strava n'y est envoyé.
+
+1. Projet Supabase (région Europe), connexion par e-mail avec code (`{{ .Token }}` dans les modèles Magic Link et
+   Confirm signup), envoi par Resend depuis `@ravitime.fr` (SMTP).
+2. Une fois : exécuter `supabase/schema.sql` dans Supabase › SQL Editor (tables `races` et `settings`, stockage
+   `traces`, suppression du compte).
+3. Sur Render : `SUPABASE_URL` et `SUPABASE_PUBLISHABLE_KEY`, que le serveur transmet à l'appli (`/api/app`). Sans
+   elles, l'appli marche sans comptes.

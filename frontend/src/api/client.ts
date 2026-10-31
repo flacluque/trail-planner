@@ -213,6 +213,9 @@ export interface AppInfo {
   accessRequired: boolean;
   accessGranted: boolean;
   feedbackUrl: string | null;
+  /** Comptes (Supabase) : adresse du projet et clé publique ; null tant qu'ils ne sont pas configurés. */
+  supabaseUrl?: string | null;
+  supabaseKey?: string | null;
 }
 
 export function fetchAppInfo(): Promise<AppInfo> {

@@ -6,7 +6,7 @@ import {
 import {
   loadCrew, loadGear, loadNutrition, loadReferences, loadTrainingOptions, saveCrew, saveNutrition, saveReferences,
   saveTrainingOptions,
-  loadFix, loadRunnerName, loadRunnerProfile, loadStravaCheck, saveRunnerProfile, saveStravaCheck, NO_RUNNER_PROFILE,
+  loadFix, loadRunnerName, loadRunnerProfile, loadStravaCheck, saveGear, saveRunnerName, saveRunnerProfile, saveStravaCheck, NO_RUNNER_PROFILE,
   type StoredRunnerProfile,
 } from './api/storage';
 import type { ElevationSource, Reference } from './api/types';
@@ -33,6 +33,10 @@ import { connectStrava } from './api/native';
 import { ListGroup, ListRow } from './components/AppScreen';
 import { FlagIcon, RouteIcon } from './components/Icons';
 import { PrivacyPage } from './components/PrivacyPage';
+import { AccountPage } from './components/AccountPage';
+import type { User } from '@supabase/supabase-js';
+import { currentUser, deleteAccount, hasStoredSession, onAccountChange, signOut } from './api/account';
+import { forgetSyncState, syncNow, type SettingsDoc, type SyncHost } from './api/sync';
 import { checkStrava, holdsStravaData, purgeStrava, reconcileNotice } from './lib/stravaData';
 import {
   deleteRaceFiles, loadRaceBook, loadRaceGpx, loadRacePlan, newRace, saveRaceBook, saveRaceGpx, saveRacePlan, scrubRacePlans,
@@ -63,17 +67,17 @@ import { defaultServices } from './lib/services';
 const SAMPLE_ID = 'bogomiles';
 const CUSTOM_ID = 'custom';
 type Tab = 'accueil' | 'plan' | 'course' | 'ravitos' | 'sac' | 'analyse' | 'algo' | 'moi' | 'references' | 'profil' | 'retour'
-  | 'confidentialite';
+  | 'confidentialite' | 'compte';
 const TABS: [Tab, string][] = [['accueil', 'Accueil'], ['plan', 'Mon plan'], ['course', 'En course'], ['ravitos', 'Ravitos'],
   ['sac', 'Sac'], ['analyse', 'Analyse'], ['algo', 'Comment ça marche']];
 const TAB_HASH: Record<Tab, string> = {
   accueil: '#accueil', plan: '#plan', course: '#course', ravitos: '#ravitos', sac: '#sac', analyse: '#analyse', algo: '#algorithme',
-  moi: '#moi', references: '#references', profil: '#profil', retour: '#retour', confidentialite: '#confidentialite',
+  moi: '#moi', references: '#references', profil: '#profil', retour: '#retour', confidentialite: '#confidentialite', compte: '#compte',
 };
 /** Sur téléphone, la section de la barre d'onglets qui contient chaque page. */
 const SECTION_OF: Record<Tab, Section> = {
   accueil: 'accueil', course: 'accueil', plan: 'plan', ravitos: 'ravitos', sac: 'ravitos',
-  moi: 'moi', references: 'moi', profil: 'moi', retour: 'moi', analyse: 'moi', algo: 'moi', confidentialite: 'moi',
+  moi: 'moi', references: 'moi', profil: 'moi', retour: 'moi', analyse: 'moi', algo: 'moi', confidentialite: 'moi', compte: 'moi',
 };
 /** Largeur de la mise en page téléphone (barre d'onglets en bas, voir styles.css). */
 const PHONE = '(max-width: 860px)';
@@ -487,7 +491,11 @@ export function App({ feedbackUrl = null }: { feedbackUrl?: string | null } = {}
   /** Supprime une course et tout ce qui lui appartient ; on passe à la suivante, ou à l'exemple s'il n'en reste pas. */
   function deleteRace(id: string) {
     const wasActive = bookRef.current.active === id;
-    changeBook((b) => ({ ...b, races: b.races.filter((r) => r.id !== id), active: b.active === id ? null : b.active }));
+    changeBook((b) => ({
+      ...b, races: b.races.filter((r) => r.id !== id), active: b.active === id ? null : b.active,
+      // Connecté : la suppression partira aussi dans le compte.
+      ...(userRef.current ? { deleted: [...(b.deleted ?? []), id] } : {}),
+    }));
     void deleteRaceFiles(id);
     if (!wasActive) return;
     const next = defaultRaceId(bookRef.current);
@@ -530,7 +538,12 @@ export function App({ feedbackUrl = null }: { feedbackUrl?: string | null } = {}
 
   function changeGpx(file: File | null) {
     setGpx(file);
-    if (activeRef.current) void saveRaceGpx(activeRef.current, file);
+    const id = activeRef.current;
+    if (id) {
+      void saveRaceGpx(id, file);
+      const trace = file ? { name: file.name, size: file.size } : null;
+      changeBook((b) => ({ ...b, races: b.races.map((r) => (r.id === id ? { ...r, trace, updatedAt: new Date().toISOString() } : r)) }));
+    }
     // Les ravitos placés à la main l'étaient sur l'ancienne trace.
     const next = withoutTrackPositions(draft);
     if (next !== draft) {
@@ -582,6 +595,8 @@ export function App({ feedbackUrl = null }: { feedbackUrl?: string | null } = {}
 
   // Profil nutrition : partagé par la nutrition et la checklist du matériel (eau obligatoire / flasques).
   const [nutritionProfile, setNutritionProfile] = useState<NutritionProfile>(loadNutrition);
+  const nutritionRef = useRef(nutritionProfile);
+  nutritionRef.current = nutritionProfile;
   const changeNutritionProfile = (next: NutritionProfile) => {
     setNutritionProfile(next);
     saveNutrition(next);
@@ -702,6 +717,120 @@ export function App({ feedbackUrl = null }: { feedbackUrl?: string | null } = {}
   const pickerSubtitle = mode === 'demo' ? 'Exemple · choisir une de tes courses' : plan && course && !otherRace
     ? `${formatClock(course.race.start)} · ${formatKm(plan.totalDistanceKm)} km · ${formatMeters(plan.totalGainM)} D+`
     : 'Plan à calculer';
+  // Compte (facultatif) : sauvegarde de Mes courses et des réglages, retrouvés sur tous les appareils (api/sync).
+  const [user, setUser] = useState<User | null>(null);
+  const userRef = useRef(user);
+  userRef.current = user;
+  const [sync, setSync] = useState<{ state: 'idle' | 'busy' | 'error'; at: string | null; error?: string }>({ state: 'idle', at: null });
+  useEffect(() => { if (hasStoredSession()) void currentUser().then(setUser).catch(() => undefined); }, []);
+  useEffect(() => {
+    if (!user) return;
+    let live = true;
+    let off = () => undefined as void;
+    void onAccountChange((u) => setUser((prev) => (prev?.id === u?.id ? prev : u))).then((o) => { if (live) off = o; else o(); });
+    return () => { live = false; off(); };
+  }, [user]);
+
+  const syncHost: SyncHost = {
+    races: () => bookRef.current.races.map((r) => ({
+      id: r.id, updatedAt: r.updatedAt ?? r.createdAt,
+      doc: { draft: r.draft, createdAt: r.createdAt, summary: r.summary, gear: loadGear(r.id), crew: loadCrew(r.id), gpx: r.trace ?? null },
+    })),
+    deletedHere: () => bookRef.current.deleted ?? [],
+    settings: (): SettingsDoc => ({
+      references: latest.current.references.filter((r) => !r.strava && !isExampleReference(r)),
+      source: latest.current.source, nutrition: nutritionRef.current, training: trainingRef.current, runnerName: loadRunnerName(),
+    }),
+    localGpx: (id) => loadRaceGpx(bookRef.current, id),
+    applyRaces: (take, remove) => {
+      const hadRaces = bookRef.current.races.length > 0;
+      const active = bookRef.current.active;
+      for (const t of take) {
+        saveGear(t.id, t.doc.gear);
+        saveCrew(t.id, t.doc.crew);
+      }
+      const traces = Promise.all(take.filter((t) => t.gpx !== undefined).map((t) => saveRaceGpx(t.id, t.gpx ?? null)));
+      changeBook((b) => {
+        const kept = b.races.filter((r) => !remove.includes(r.id));
+        const races = [...kept.filter((r) => !take.some((t) => t.id === r.id)), ...take.map((t) => ({
+          id: t.id, draft: t.doc.draft, createdAt: t.doc.createdAt, updatedAt: t.updatedAt, summary: t.doc.summary, trace: t.doc.gpx,
+        }))];
+        return { ...b, races, active: b.active && remove.includes(b.active) ? null : b.active };
+      });
+      for (const id of remove) void deleteRaceFiles(id);
+      // La course affichée a changé ailleurs, ou n'existe plus ; premier appareil connecté : on montre ses courses.
+      void traces.then(() => {
+        if (mode !== 'custom' && hadRaces) return;
+        const next = active && !remove.includes(active) ? active : defaultRaceId(bookRef.current);
+        if (next && (next !== active || take.some((t) => t.id === active) || !hadRaces)) void openRace(next);
+        else if (!next && mode === 'custom') switchMode('demo');
+      });
+    },
+    applySettings: (doc, first) => {
+      const strava = latest.current.references.filter((r) => r.strava);
+      const mine = latest.current.references.filter((r) => !r.strava && !isExampleReference(r));
+      // Première connexion de cet appareil : ses références saisies à la main s'ajoutent à celles du compte.
+      const manual = first ? [...doc.references, ...mine.filter((m) => !doc.references.some((d) => JSON.stringify(d) === JSON.stringify(m)))] : doc.references;
+      const refs = [...manual, ...strava];
+      setNutritionProfile(doc.nutrition);
+      saveNutrition(doc.nutrition);
+      setTraining(doc.training);
+      trainingRef.current = doc.training;
+      saveTrainingOptions(doc.training);
+      if (doc.runnerName) saveRunnerName(doc.runnerName);
+      void latest.current.compute(refs.length ? refs : DEFAULT_REFERENCES, doc.source);
+    },
+    clearDeleted: (ids) => {
+      if (ids.length) changeBook((b) => ({ ...b, deleted: (b.deleted ?? []).filter((id) => !ids.includes(id)) }));
+    },
+  };
+  const syncHostRef = useRef(syncHost);
+  syncHostRef.current = syncHost;
+  const syncing = useRef(false);
+  const lastSync = useRef(0);
+  const runSync = useCallback(async (force = false) => {
+    const u = userRef.current;
+    if (!u || syncing.current || (!force && Date.now() - lastSync.current < 15_000)) return;
+    syncing.current = true;
+    setSync((s) => ({ ...s, state: 'busy' }));
+    try {
+      // Trace des courses enregistrées avant cette version : son nom et sa taille, pour savoir si elle a changé.
+      for (const r of bookRef.current.races.filter((x) => x.trace === undefined)) {
+        const file = await loadRaceGpx(bookRef.current, r.id);
+        const trace = file ? { name: file.name, size: file.size } : null;
+        changeBook((b) => ({ ...b, races: b.races.map((x) => (x.id === r.id ? { ...x, trace } : x)) }));
+      }
+      await syncNow(u.id, syncHostRef.current);
+      lastSync.current = Date.now();
+      setSync({ state: 'idle', at: new Date().toISOString() });
+    } catch (e) {
+      setSync((s) => ({ ...s, state: 'error', error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      syncing.current = false;
+    }
+  }, [changeBook]);
+  // À la connexion, au retour dans l'appli, en changeant de page, et peu après chaque modification.
+  useEffect(() => { if (user && booted) void runSync(true); }, [user, booted, runSync]);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') void runSync(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [runSync]);
+  useEffect(() => { void runSync(); }, [tab, runSync]);
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setTimeout(() => void runSync(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [book, references, nutritionProfile, training, crew, user, runSync]);
+
+  async function leaveAccount(remove: boolean) {
+    if (remove) await deleteAccount();
+    else await signOut();
+    forgetSyncState();
+    setUser(null);
+    setSync({ state: 'idle', at: null });
+  }
+
   // Sur téléphone, les références sont dans Moi : le plan y renvoie par une ligne « Ton rythme ».
   const rhythmRow = (
       <ListRow icon={<RouteIcon size={18} />} tone={exampleReferences ? 'warm' : 'accent'}
@@ -762,6 +891,11 @@ export function App({ feedbackUrl = null }: { feedbackUrl?: string | null } = {}
             💬 <span className="long">Donner mon avis</span>
           </a>
         )}
+        <a className="account-link no-print" href={TAB_HASH.compte} aria-current={tab === 'compte' ? 'page' : undefined}
+          title={user ? `Ton compte : ${user.email}` : 'Sauvegarde tes courses et retrouve-les partout'}>
+          {user ? <><span className="account-avatar" aria-hidden>{(user.email ?? '?').charAt(0).toUpperCase()}</span>
+            <span className="long">Ton compte</span></> : 'Se connecter'}
+        </a>
         <div className="pdf-menu no-print" hidden={tab === 'accueil'}>
           <button type="button" className="ghost" onClick={() => setPdfMenu((m) => !m)} disabled={savingPdf}
             aria-disabled={pdfBlocked ? true : undefined} aria-expanded={pdfMenu} aria-haspopup="menu"
@@ -888,8 +1022,14 @@ export function App({ feedbackUrl = null }: { feedbackUrl?: string | null } = {}
               hrefs={{ references: TAB_HASH.references, profil: TAB_HASH.profil, retour: TAB_HASH.retour, analyse: TAB_HASH.analyse,
                 algo: TAB_HASH.algo, confidentialite: TAB_HASH.confidentialite }}
               feedbackUrl={feedbackUrl} onPdf={(v) => void savePdf(v)} onWatch={() => setGarminOpen(true)} exportBlocked={pdfBlocked}
-              onStrava={() => { setStravaRequested(true); goTab('references'); }} onDisconnectStrava={disconnectAndPurge} />
+              onStrava={() => { setStravaRequested(true); goTab('references'); }} onDisconnectStrava={disconnectAndPurge}
+              account={user ? { email: user.email ?? '', syncedAt: sync.at, error: sync.state === 'error' } : null} accountHref={TAB_HASH.compte} />
           )}
+          {tab === 'compte' && <>
+            {subPage('Ton compte')}
+            <AccountPage user={user} sync={sync} onSignedIn={setUser} onSyncNow={() => void runSync(true)}
+              onSignOut={() => leaveAccount(false)} onDelete={() => leaveAccount(true)} raceCount={book.races.length} />
+          </>}
           {tab === 'confidentialite' && <>
             {subPage('Confidentialité')}
             <PrivacyPage onDisconnectStrava={disconnectAndPurge} feedbackUrl={feedbackUrl} />

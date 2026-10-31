@@ -40,16 +40,29 @@ export function PrivacyPage({ onDisconnectStrava, feedbackUrl }: Props) {
   return (
     <article className="privacy">
       <h1>Confidentialité</h1>
-      <p className="privacy-lead">Ravitime n'a pas de compte et pas de base de données : ta course, tes références et tes
-        réglages restent sur ton appareil (le navigateur, ou l'appli).</p>
+      <p className="privacy-lead">Sans compte, tout reste sur ton appareil (le navigateur, ou l'appli). Le compte est
+        facultatif : il sauvegarde tes courses pour les retrouver sur tes autres appareils.</p>
 
       <section>
         <h2>Ce qui reste sur ton appareil</h2>
         <ul>
-          <li>Ta course (roadbook, trace GPX), tes références, ton sac, ta nutrition, ton dernier plan calculé.</li>
+          <li>Tes courses (roadbook, trace GPX, plan calculé, sac, assistance, pointages), tes références, ta nutrition.</li>
           <li>Ta connexion Strava, chiffrée : un cookie sur le site, le stockage de l'appli sur téléphone.</li>
         </ul>
-        <p>Le serveur calcule le plan et oublie aussitôt ce qu'il a reçu. Il ne garde aucune donnée sur toi.</p>
+        <p>Le serveur calcule le plan et oublie aussitôt ce qu'il a reçu.</p>
+      </section>
+
+      <section>
+        <h2>Ton compte (facultatif)</h2>
+        <p>Si tu crées un compte, il garde chez Supabase, dans un centre de données en Europe :</p>
+        <ul>
+          <li>ton adresse e-mail (pour t'envoyer le code de connexion) ;</li>
+          <li>tes courses : roadbook, trace GPX, sac, assistance, résumé du plan ;</li>
+          <li>tes réglages : références saisies à la main, nutrition, préparation, prénom.</li>
+        </ul>
+        <p>Rien de ce qui vient de Strava n'y est envoyé : ni références importées, ni profil de coureur, ni retours de
+          course. Chaque coureur n'a accès qu'à ses propres données. « Supprimer mon compte » (Moi › Ton compte) efface
+          tout, définitivement.</p>
       </section>
 
       <section>
