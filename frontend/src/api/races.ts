@@ -113,5 +113,6 @@ export async function scrubRacePlans(ids: string[]): Promise<void> {
 }
 
 export function updateDraft(book: RaceBook, id: string, draft: RaceDraft): RaceBook {
-  return { ...book, races: book.races.map((r) => (r.id === id ? { ...r, draft } : r)) };
+  const updatedAt = new Date().toISOString();
+  return { ...book, races: book.races.map((r) => (r.id === id ? { ...r, draft, updatedAt } : r)) };
 }

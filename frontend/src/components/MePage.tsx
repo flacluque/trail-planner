@@ -17,6 +17,9 @@ interface Props {
   onPdf: (variant: 'summary' | 'full') => void;
   onWatch: () => void;
   exportBlocked: string | null;
+  /** Compte connecté (null : pas connecté). */
+  account: { email: string; syncedAt: string | null; error: boolean } | null;
+  accountHref: string;
 }
 
 /**
@@ -24,7 +27,7 @@ interface Props {
  * détail du plan et l'explication du calcul. Ce qui était caché derrière « Plus ».
  */
 export function MePage({ referenceCount, exampleReferences, runner, hrefs, feedbackUrl, onPdf, onWatch, exportBlocked, onStrava,
-  onDisconnectStrava }: Props) {
+  onDisconnectStrava, account, accountHref }: Props) {
   const [strava, setStrava] = useState<{ configured: boolean; connected: boolean } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +54,14 @@ export function MePage({ referenceCount, exampleReferences, runner, hrefs, feedb
   return (
     <div className="me">
       <ScreenTitle title="Moi" />
+
+      <ListGroup>
+        <ListRow icon={<PersonIcon size={18} />} title={account ? account.email : 'Ton compte'}
+          detail={!account ? 'Facultatif : sauvegarde tes courses et retrouve-les sur tous tes appareils'
+            : account.error ? 'Synchronisation en échec : touche pour réessayer'
+              : account.syncedAt ? `Synchronisé à ${new Date(account.syncedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : 'Connecté'}
+          value={account ? undefined : <span className="row-action">Se connecter</span>} href={accountHref} />
+      </ListGroup>
 
       <ListGroup header="Ton rythme" footer={error ?? 'Ton plan part de tes courses : plus elles sont récentes et proches de ta course, plus il est juste.'}>
         {strava?.configured !== false && (

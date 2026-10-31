@@ -21,7 +21,11 @@ export interface RaceEntry {
   id: string;
   draft: RaceDraft;
   createdAt: string;
+  /** Dernière modification de la saisie (synchronisation avec le compte). */
+  updatedAt?: string;
   summary: RaceSummary | null;
+  /** Nom et taille de sa trace GPX (null sans trace ; absent pour une course enregistrée avant les comptes). */
+  trace?: { name: string; size: number } | null;
 }
 
 export interface RaceBook {
@@ -30,6 +34,8 @@ export interface RaceBook {
   races: RaceEntry[];
   /** Course à qui revient la trace GPX gardée par une version à course unique (déplacée à la première lecture). */
   legacyGpx?: string;
+  /** Courses supprimées ici, à supprimer aussi dans le compte à la prochaine synchronisation. */
+  deleted?: string[];
 }
 
 export const EMPTY_BOOK: RaceBook = { active: null, races: [] };

@@ -1755,3 +1755,22 @@ button.race-picker-btn[aria-expanded='true'] { border-color: var(--accent); }
   .race-dashboard .prep-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .race-dashboard .course-strip { max-height: 210px; }
+
+/* ---------- Compte (components/AccountPage.tsx) ---------- */
+.account { display: flex; flex-direction: column; gap: 12px; max-width: 560px; }
+.account p { margin: 0; }
+.account-form { display: flex; flex-direction: column; gap: 12px; }
+.account-form label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.account-form input { min-height: 48px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 1rem; }
+.account-form button[type='submit'] { min-height: 48px; }
+input.account-code { font-family: var(--font-display); font-size: 1.75rem; font-weight: 700; letter-spacing: 0.3em; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.account-danger summary { cursor: pointer; color: var(--missed-fg); font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.account-danger p { margin: 4px 0 10px; }
+button.danger { background: var(--missed-fg); border-color: var(--missed-fg); color: #fff; }
+a.account-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid var(--border);
+  border-radius: 10px; color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+a.account-link[aria-current='page'] { border-color: var(--accent); }
+.account-avatar { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+  color: var(--accent-contrast); font-size: var(--fs-micro); }
